@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<UI version="4.0" >
+ <class>Sudoku_demoClass</class>
+ <widget class="QWidget" name="Sudoku_demoClass" >
+  <property name="objectName" >
+   <string notr="true">Sudoku_demoClass</string>
+  </property>
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>400</height>
+   </rect>
+  </property>
+  <property name="windowTitle" >
+   <string>Sudoku_demo</string>
+  </property>$centralwidget$
+ </widget>
+ <layoutDefault spacing="6" margin="11" />
+ <pixmapfunction></pixmapfunction>
+ <resources>
+   <include location="Sudoku_demo.qrc"/>
+ </resources>
+ <connections/>
+</UI>
