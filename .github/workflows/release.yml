@@ -46,6 +46,7 @@ jobs:
             /p:Configuration=Release `
             /p:Platform=x64 `
             /p:VcpkgEnabled=true `
+            /p:VcpkgEnableManifest=true `
             /p:QtInstallDir="$env:QT_ROOT_DIR" `
             /p:QtToolsPath="$env:QT_ROOT_DIR\bin" `
             /m
