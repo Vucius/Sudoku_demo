@@ -36,8 +36,9 @@ jobs:
       - name: Setup QtMsBuild
         shell: pwsh
         run: |
-          git clone --depth 1 https://code.qt.io/qt-labs/vstools.git
-          Copy-Item -Path vstools\QtMSBuild\QtMsBuild -Destination QtMsBuild -Recurse
+          Invoke-WebRequest -Uri "https://download.qt.io/official_releases/vsaddin/3.5.0/qt-vsaddin-msvc2022-x64-3.5.0.vsix" -OutFile "qtvsaddin.zip"
+          Expand-Archive -Path "qtvsaddin.zip" -DestinationPath "qtvsaddin" -Force
+          Copy-Item -Path "qtvsaddin\QtMSBuild" -Destination "QtMsBuild" -Recurse
 
       - name: Build
         run: |
