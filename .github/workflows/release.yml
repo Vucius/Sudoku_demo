@@ -33,6 +33,12 @@ jobs:
         with:
           vcpkgGitCommitId: "b02e341c927f16d991edbd915d8ea43eac52096c"
 
+      - name: Setup QtMsBuild
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://code.qt.io/qt-labs/vstools.git
+          Copy-Item -Path vstools\QtMSBuild\QtMsBuild -Destination QtMsBuild -Recurse
+
       - name: Build
         run: |
           msbuild Sudoku_demo.vcxproj `
