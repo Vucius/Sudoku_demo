@@ -60,14 +60,19 @@ jobs:
           if (Test-Path "x64\Release\*.dll") {
             Copy-Item x64\Release\*.dll release_pkg\
           }
+          # 复制需要的资源文件夹
+          Copy-Item -Path Character_Sample, OCR_Model, Sudoku_Sample -Destination release_pkg\ -Recurse
           # 使用 windeployqt 收集 Qt 依赖
           windeployqt --release --dir release_pkg release_pkg\Sudoku_demo.exe
-          # 压缩
-          Compress-Archive -Path release_pkg\* -DestinationPath Sudoku_demo-${{ github.ref_name }}.zip
+
+      - name: Build Installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: installer.iss
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: Sudoku_demo-${{ github.ref_name }}.zip
+          files: Sudoku_demo_Setup.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
