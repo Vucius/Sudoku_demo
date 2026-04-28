@@ -5,9 +5,14 @@
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QImage>
+#include <QTableWidget>
+#include <QHeaderView>
 #include <array>
+#include <opencv2/opencv.hpp>
 #include "SudokuGrid.h"
 #include "SudokuSolver.h"
+#include "SudokuImageRecognizer.h"
 
 class Sudoku_demo : public QWidget
 {
@@ -22,17 +27,17 @@ private slots:
     void onSolve();
 
 private:
-    // Left side: recognized puzzle
-    SudokuGrid* m_leftGrid;
+    // Left side: editable sudoku grid (to replace warped image)
+    QTableWidget* m_leftGridTable;
     QPushButton* m_btnLoad;
 
-    // Right side: solved puzzle
+    // Right side: solved puzzle grid
     SudokuGrid* m_rightGrid;
     QPushButton* m_btnSolve;
 
-    // Current puzzle data
+    // Current puzzle data (from image recognition)
     std::array<std::array<int, 9>, 9> m_puzzleData{};
 
-    // Parse a sudoku image (stub: opens file dialog and fills demo data)
-    bool loadSudokuFromImage(const QString& filePath);
+    // Helper: convert cv::Mat to QImage
+    static QImage matToQImage(const cv::Mat& mat);
 };

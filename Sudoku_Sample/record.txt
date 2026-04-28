@@ -1,0 +1,15 @@
+-a times, "times new roman", serif
+-b times, "times new roman", serif
+-c times, "times new roman", serif
+-d 'Hauss, sans-serif', 'Hauss-book, Hauss, "sans-serif"'
+-e
+-f
+-g 'Arial, Helvetica, sans-serif'
+-h
+-i 'Montserrat, "Montserrat Fallback"'
+-j
+-k
+-l '__Inter_f367f3, __Inter_Fallback_f367f3'
+-m
+-n
+
