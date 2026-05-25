@@ -1,43 +1,57 @@
 #pragma once
 
-#include <QWidget>
-#include <QPushButton>
-#include <QLabel>
-#include <QHBoxLayout>
-#include <QVBoxLayout>
-#include <QImage>
-#include <QTableWidget>
 #include <QHeaderView>
+#include <QHBoxLayout>
+#include <QImage>
+#include <QLabel>
+#include <QPushButton>
+#include <QColor>
+#include <QTableWidget>
+#include <QVBoxLayout>
+#include <QWidget>
 #include <array>
 #include <opencv2/opencv.hpp>
 #include "SudokuGrid.h"
-#include "SudokuSolver.h"
 #include "SudokuImageRecognizer.h"
+#include "SudokuSolver.h"
 
 class Sudoku_demo : public QWidget
 {
     Q_OBJECT
 
 public:
-    Sudoku_demo(QWidget *parent = nullptr);
+    explicit Sudoku_demo(QWidget* parent = nullptr);
     ~Sudoku_demo();
 
 private slots:
     void onLoadImage();
+    void onRecognize();
+    void onRetrain();
     void onSolve();
 
 private:
-    // Left side: editable sudoku grid (to replace warped image)
-    QTableWidget* m_leftGridTable;
-    QPushButton* m_btnLoad;
+    QLabel* m_originalImageLabel = nullptr;
+    QTableWidget* m_leftGridTable = nullptr;
+    SudokuGrid* m_rightGrid = nullptr;
 
-    // Right side: solved puzzle grid
-    SudokuGrid* m_rightGrid;
-    QPushButton* m_btnSolve;
+    QPushButton* m_btnLoad = nullptr;
+    QPushButton* m_btnRecognize = nullptr;
+    QPushButton* m_btnRetrain = nullptr;
+    QPushButton* m_btnSolve = nullptr;
+    QLabel* m_noticeLabel = nullptr;
+    QLabel* m_trainingStatusLabel = nullptr;
 
-    // Current puzzle data (from image recognition)
+    QString m_currentImagePath;
+    bool m_updatingGrid = false;
     std::array<std::array<int, 9>, 9> m_puzzleData{};
+    std::array<std::array<bool, 9>, 9> m_correctedMask{};
 
-    // Helper: convert cv::Mat to QImage
     static QImage matToQImage(const cv::Mat& mat);
+
+    QWidget* createPanel(const QString& title, QWidget* content, const QColor& titleColor);
+    void configureRecognitionTable();
+    void fillRecognitionTable(int grid[9][9]);
+    void refreshButtonStates(bool hasImage, bool hasRecognition);
+    bool readCurrentPuzzle(std::array<std::array<int, 9>, 9>& puzzle);
+    void showOriginalImage(const QString& filePath);
 };

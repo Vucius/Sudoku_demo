@@ -2,13 +2,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/dnn.hpp>
 #include <array>
-#include <vector>
 #include "RobustSudokuDetector.h"
-
-struct DigitTemplate {
-    int digit;
-    cv::Mat img;
-};
 
 class SudokuImageRecognizer
 {
@@ -22,9 +16,11 @@ public:
 
 private:
     RobustSudokuDetector m_detector;
-    std::vector<DigitTemplate> m_templates;
+    cv::dnn::Net m_digitNet;
+    bool m_digitNetLoaded = false;
+    std::string m_digitNetError;
 
-    cv::Mat padAndResize(const cv::Mat& src);
+    cv::Mat preprocessDigitForCustomModel(const cv::Mat& cell);
 
     void splitIntoCells(const cv::Mat& warpedGray,
                         std::array<cv::Mat, 81>& cells);

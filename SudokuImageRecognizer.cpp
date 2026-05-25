@@ -1,96 +1,100 @@
 #include "SudokuImageRecognizer.h"
-#include <QDir>
-#include <QFileInfoList>
-#include <QStringList>
+
+#include <QCoreApplication>
+#include <QFileInfo>
+#include <opencv2/core/cuda.hpp>
+#include <utility>
+
+namespace {
+std::pair<int, double> argmaxSoftmax(const cv::Mat& logits)
+{
+    cv::Mat row = logits.reshape(1, 1);
+    cv::Mat scores;
+    row.convertTo(scores, CV_32F);
+
+    double maxLogit = 0.0;
+    cv::minMaxLoc(scores, nullptr, &maxLogit);
+
+    cv::Mat probs;
+    cv::exp(scores - maxLogit, probs);
+    probs /= cv::sum(probs)[0];
+
+    cv::Point classId;
+    double confidence = 0.0;
+    cv::minMaxLoc(probs, nullptr, &confidence, nullptr, &classId);
+    return {classId.x, confidence};
+}
+}
 
 SudokuImageRecognizer::SudokuImageRecognizer()
 {
-    // 加载无模型的字符模板
-    for (int d = 1; d <= 9; ++d) {
-        QDir dir(QString("Character_Sample/%1").arg(d));
-        if (!dir.exists()) continue;
-        
-        QStringList filters;
-        filters << "*.png" << "*.jpg" << "*.bmp";
-        dir.setNameFilters(filters);
-        
-        QFileInfoList list = dir.entryInfoList(QDir::Files);
-        for (const QFileInfo& fileInfo : list) {
-            std::string path = fileInfo.absoluteFilePath().toLocal8Bit().constData();
-            cv::Mat img = cv::imread(path, cv::IMREAD_UNCHANGED);
-            if (img.empty()) continue;
-            
-            cv::Mat bin;
-            if (img.channels() == 4) {
-                // 提取 alpha 通道：文字区域是不透明的(255)
-                std::vector<cv::Mat> channels;
-                cv::split(img, channels);
-                cv::threshold(channels[3], bin, 127, 255, cv::THRESH_BINARY);
-            } else {
-                cv::Mat gray;
-                if (img.channels() == 3) cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
-                else gray = img.clone();
-                
-                // 判断背景色：大多数像素 > 128 说明是白底黑字，需要反转
-                if (cv::countNonZero(gray > 128) > gray.total() / 2) {
-                    cv::threshold(gray, bin, 0, 255, cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
-                } else {
-                    cv::threshold(gray, bin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-                }
-            }
-            
-            // 贴边裁剪
-            cv::Rect bbox = cv::boundingRect(bin);
-            if (bbox.width > 0 && bbox.height > 0) {
-                cv::Mat processed = padAndResize(bin(bbox));
-                m_templates.push_back({d, processed});
-            }
+    QString modelPath = QCoreApplication::applicationDirPath() + "/OCR_Model/custom_model.onnx";
+    if (!QFileInfo::exists(modelPath)) {
+        modelPath = "OCR_Model/custom_model.onnx";
+    }
+    if (!QFileInfo::exists(modelPath)) {
+        modelPath = QCoreApplication::applicationDirPath() + "/../../OCR_Model/custom_model.onnx";
+    }
+
+    try {
+        m_digitNet = cv::dnn::readNetFromONNX(modelPath.toLocal8Bit().constData());
+        m_digitNetLoaded = !m_digitNet.empty();
+        if (!m_digitNetLoaded) {
+            m_digitNetError = "OpenCV DNN returned an empty network.";
+            return;
         }
+
+        bool useCuda = false;
+        try {
+            useCuda = cv::cuda::getCudaEnabledDeviceCount() > 0;
+        } catch (const cv::Exception&) {
+            useCuda = false;
+        }
+
+        if (useCuda) {
+            m_digitNet.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+            m_digitNet.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+        } else {
+            m_digitNet.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+            m_digitNet.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+        }
+
+    } catch (const cv::Exception& e) {
+        m_digitNetLoaded = false;
+        m_digitNetError = e.what();
     }
 }
 
-// ── 等比例缩放并居中补齐到 24x24 ───────────────────────
-cv::Mat SudokuImageRecognizer::padAndResize(const cv::Mat& src)
+cv::Mat SudokuImageRecognizer::preprocessDigitForCustomModel(const cv::Mat& cell)
 {
-    double scale = 24.0 / std::max(src.cols, src.rows);
+    cv::Mat bgr;
+    if (cell.channels() == 3) {
+        bgr = cell.clone();
+    } else if (cell.channels() == 4) {
+        cv::cvtColor(cell, bgr, cv::COLOR_BGRA2BGR);
+    } else {
+        cv::cvtColor(cell, bgr, cv::COLOR_GRAY2BGR);
+    }
+
     cv::Mat resized;
-    cv::resize(src, resized, cv::Size(), scale, scale, cv::INTER_AREA);
-    
-    cv::Mat canvas = cv::Mat::zeros(24, 24, CV_8UC1);
-    int dx = (24 - resized.cols) / 2;
-    int dy = (24 - resized.rows) / 2;
-    
-    // 边界保护
-    if (dx < 0) dx = 0;
-    if (dy < 0) dy = 0;
-    if (dx + resized.cols > 24) dx = 24 - resized.cols;
-    if (dy + resized.rows > 24) dy = 24 - resized.rows;
-    
-    resized.copyTo(canvas(cv::Rect(dx, dy, resized.cols, resized.rows)));
-    
-    // 再次二值化以防 resize 产生的边缘模糊
-    cv::threshold(canvas, canvas, 127, 255, cv::THRESH_BINARY);
-    return canvas;
+    cv::resize(bgr, resized, cv::Size(224, 224), 0, 0, cv::INTER_AREA);
+    return resized;
 }
 
-// ── 切割 81 个单元格 ──────────────────────────────────
 void SudokuImageRecognizer::splitIntoCells(const cv::Mat& warpedGray,
                                            std::array<cv::Mat, 81>& cells)
 {
     int cellSize = warpedGray.rows / 9;
     int idx = 0;
 
-    for (int r = 0; r < 9; ++r)
-    {
-        for (int c = 0; c < 9; ++c)
-        {
+    for (int r = 0; r < 9; ++r) {
+        for (int c = 0; c < 9; ++c) {
             int x = c * cellSize;
             int y = r * cellSize;
             cv::Rect roi(x, y, cellSize, cellSize);
-
             cv::Mat cell = warpedGray(roi).clone();
 
-            int margin = 4; // 调小一点，防止贴边的数字被切掉
+            int margin = 4;
             cv::Rect innerRoi(margin, margin,
                               cell.cols - 2 * margin,
                               cell.rows - 2 * margin);
@@ -100,10 +104,9 @@ void SudokuImageRecognizer::splitIntoCells(const cv::Mat& warpedGray,
     }
 }
 
-// ── 检测单元格是否包含数字并识别（基于模板匹配） ────────────────
 int SudokuImageRecognizer::recognizeDigit(const cv::Mat& cell)
 {
-    if (m_templates.empty()) return 0;
+    if (!m_digitNetLoaded) return 0;
 
     cv::Mat gray;
     if (cell.channels() == 3)
@@ -114,41 +117,33 @@ int SudokuImageRecognizer::recognizeDigit(const cv::Mat& cell)
     cv::Mat binary;
     cv::adaptiveThreshold(gray, binary, 255,
         cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 11, 2);
-    
+
     cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, {2, 2});
     cv::morphologyEx(binary, binary, cv::MORPH_OPEN, kernel);
 
     if (cv::countNonZero(binary) < 15) return 0;
 
     cv::Rect bbox = cv::boundingRect(binary);
-    if (bbox.width == 0 || bbox.height == 0) return 0;
+    if (bbox.width < 3 || bbox.height < 6) return 0;
 
-    cv::Mat digit = padAndResize(binary(bbox));
+    cv::Mat digit = preprocessDigitForCustomModel(cell);
+    cv::Mat blob = cv::dnn::blobFromImage(digit, 1.0 / 255.0, cv::Size(224, 224),
+                                          cv::Scalar(),
+                                          true, false, CV_32F);
 
-    int bestDigit = 0;
-    int minDiff = 24 * 24 + 1; // 最大可能的像素差异
-
-    for (const auto& tmpl : m_templates) {
-        cv::Mat diff;
-        // 异或运算：只有不一样的像素会变成 255
-        cv::bitwise_xor(digit, tmpl.img, diff);
-        int score = cv::countNonZero(diff);
-
-        if (score < minDiff) {
-            minDiff = score;
-            bestDigit = tmpl.digit;
+    try {
+        m_digitNet.setInput(blob);
+        cv::Mat output = m_digitNet.forward();
+        auto [digitClass, confidence] = argmaxSoftmax(output);
+        if (digitClass < 1 || digitClass > 9 || confidence < 0.60) {
+            return 0;
         }
-    }
-
-    // 如果差异度大于一定阈值（比如超过总像素的三分之一），说明可能是噪点或乱码
-    if (minDiff > (24 * 24) / 3) {
+        return digitClass;
+    } catch (const cv::Exception&) {
         return 0;
     }
-
-    return bestDigit;
 }
 
-// ── 主入口 ─────────────────────────────────────────────
 bool SudokuImageRecognizer::processImage(const std::string& filePath,
                                          cv::Mat& warpedColor,
                                          int grid[9][9],
@@ -156,36 +151,25 @@ bool SudokuImageRecognizer::processImage(const std::string& filePath,
 {
     diagMsg.clear();
     cv::Mat src = cv::imread(filePath);
-    if (src.empty())
-    {
-        diagMsg = "[Image Load] 无法读取图片，请检查路径或格式: " + filePath;
+    if (src.empty()) {
+        diagMsg = "[Image Load] Cannot read image: " + filePath;
         return false;
     }
 
-    // 检查 OCR 模型是否加载成功
-    // 检查是否有加载到模板
-    if (m_templates.empty())
-    {
-        diagMsg = "[OCR 模型替代] 未能找到任何字体模板。\n"
-                  "请确保 Character_Sample 文件夹在程序同级目录下，且里面包含 1~9 的子文件夹和图片。";
+    if (!m_digitNetLoaded) {
+        diagMsg = "[OCR Model] Failed to load OCR_Model/custom_model.onnx.\n" + m_digitNetError;
         return false;
     }
 
-    // 使用霍夫线检测 + 聚类的鲁棒检测器
     warpedColor = m_detector.detect(src, diagMsg);
     if (warpedColor.empty())
-        return false; // diagMsg 已由 detector 赋值
-
-    cv::Mat warpedGray;
-    cv::cvtColor(warpedColor, warpedGray, cv::COLOR_BGR2GRAY);
+        return false;
 
     std::array<cv::Mat, 81> cells;
-    splitIntoCells(warpedGray, cells);
+    splitIntoCells(warpedColor, cells);
 
-    for (int r = 0; r < 9; ++r)
-    {
-        for (int c = 0; c < 9; ++c)
-        {
+    for (int r = 0; r < 9; ++r) {
+        for (int c = 0; c < 9; ++c) {
             grid[r][c] = recognizeDigit(cells[r * 9 + c]);
         }
     }

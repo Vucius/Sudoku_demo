@@ -1,66 +1,157 @@
 #include "Sudoku_demo.h"
+
+#include <QBrush>
+#include <QColor>
 #include <QFileDialog>
-#include <QMessageBox>
 #include <QFont>
 #include <QFrame>
+#include <QList>
+#include <QMessageBox>
 #include <QPixmap>
 
-// ---- cv::Mat -> QImage conversion ----
 QImage Sudoku_demo::matToQImage(const cv::Mat& mat)
 {
-    if (mat.type() == CV_8UC3)
-    {
+    if (mat.type() == CV_8UC3) {
         cv::Mat rgb;
         cv::cvtColor(mat, rgb, cv::COLOR_BGR2RGB);
-        return QImage((const unsigned char*)rgb.data,
-                      rgb.cols, rgb.rows, (int)rgb.step,
+        return QImage(rgb.data, rgb.cols, rgb.rows, static_cast<int>(rgb.step),
                       QImage::Format_RGB888).copy();
     }
-    else if (mat.type() == CV_8UC1)
-    {
-        return QImage((const unsigned char*)mat.data,
-                      mat.cols, mat.rows, (int)mat.step,
+
+    if (mat.type() == CV_8UC1) {
+        return QImage(mat.data, mat.cols, mat.rows, static_cast<int>(mat.step),
                       QImage::Format_Grayscale8).copy();
     }
+
     return QImage();
 }
 
-// ---- Constructor ----
-Sudoku_demo::Sudoku_demo(QWidget *parent)
+Sudoku_demo::Sudoku_demo(QWidget* parent)
     : QWidget(parent)
 {
-    // ---- Window setup ----
-    setWindowTitle(QStringLiteral("Sudoku Demo - \u8BC6\u522B\u4E0E\u6C42\u89E3"));
-    resize(900, 520);
-    setMinimumSize(700, 420);
+    setWindowTitle(QStringLiteral("Sudoku Demo - OCR and Solver"));
+    resize(1180, 560);
+    setMinimumSize(980, 480);
 
-    // ---- Main horizontal layout ----
-    QHBoxLayout* mainLayout = new QHBoxLayout(this);
-    mainLayout->setContentsMargins(16, 16, 16, 16);
-    mainLayout->setSpacing(16);
-
-    // ========== Left panel (warped image display) ==========
-    QVBoxLayout* leftLayout = new QVBoxLayout();
-    leftLayout->setSpacing(10);
-
-    QLabel* leftTitle = new QLabel(QStringLiteral("\u8BC6\u522B\u7ED3\u679C"));
-    QFont titleFont("Segoe UI", 13, QFont::Bold);
-    leftTitle->setFont(titleFont);
-    leftTitle->setAlignment(Qt::AlignCenter);
-    leftTitle->setStyleSheet("color: #19376D; padding: 4px;");
+    m_originalImageLabel = new QLabel(this);
+    m_originalImageLabel->setAlignment(Qt::AlignCenter);
+    m_originalImageLabel->setMinimumSize(300, 360);
+    m_originalImageLabel->setText(QStringLiteral("No image loaded"));
+    m_originalImageLabel->setStyleSheet(
+        "QLabel { background: #FFFFFF; border: 2px solid #CDD5E0; color: #6B7280; }"
+    );
 
     m_leftGridTable = new QTableWidget(9, 9, this);
+    configureRecognitionTable();
+    m_leftGridTable->hide();
+
+    m_rightGrid = new SudokuGrid(this);
+
+    QWidget* originalPanel = createPanel(QStringLiteral("Original Image"), m_originalImageLabel, QColor(70, 70, 70));
+    QWidget* recognitionPanel = createPanel(QStringLiteral("OCR Result"), m_leftGridTable, QColor(25, 55, 109));
+    QWidget* solutionPanel = createPanel(QStringLiteral("Solution"), m_rightGrid, QColor(0, 150, 100));
+
+    QHBoxLayout* contentLayout = new QHBoxLayout();
+    contentLayout->setSpacing(14);
+    contentLayout->addWidget(originalPanel, 1);
+    contentLayout->addWidget(recognitionPanel, 1);
+    contentLayout->addWidget(solutionPanel, 1);
+
+    m_btnLoad = new QPushButton(QStringLiteral("Load Image"), this);
+    m_btnRecognize = new QPushButton(QStringLiteral("Recognize"), this);
+    m_btnRetrain = new QPushButton(QStringLiteral("Retrain"), this);
+    m_btnSolve = new QPushButton(QStringLiteral("Solve"), this);
+
+    const QList<QPushButton*> buttons = {m_btnLoad, m_btnRecognize, m_btnRetrain, m_btnSolve};
+    for (QPushButton* button : buttons) {
+        button->setMinimumHeight(38);
+        button->setCursor(Qt::PointingHandCursor);
+        button->setStyleSheet(
+            "QPushButton {"
+            "  background-color: #19376D;"
+            "  color: white;"
+            "  border: none;"
+            "  border-radius: 6px;"
+            "  font-size: 14px;"
+            "  font-weight: 600;"
+            "  padding: 8px 18px;"
+            "}"
+            "QPushButton:hover { background-color: #2B4F8C; }"
+            "QPushButton:pressed { background-color: #0F2340; }"
+            "QPushButton:disabled { background-color: #B0B8C4; }"
+        );
+    }
+
+    QHBoxLayout* actionLayout = new QHBoxLayout();
+    actionLayout->setSpacing(10);
+    actionLayout->addStretch();
+    actionLayout->addWidget(m_btnLoad);
+    actionLayout->addWidget(m_btnRecognize);
+    actionLayout->addWidget(m_btnRetrain);
+    actionLayout->addWidget(m_btnSolve);
+    actionLayout->addStretch();
+
+    m_noticeLabel = new QLabel(QStringLiteral("Ready"), this);
+    m_trainingStatusLabel = new QLabel(QStringLiteral("Retrain: idle"), this);
+    m_noticeLabel->setStyleSheet("color: #4B5563; font-size: 12px;");
+    m_trainingStatusLabel->setStyleSheet("color: #4B5563; font-size: 12px;");
+
+    QHBoxLayout* statusLayout = new QHBoxLayout();
+    statusLayout->setContentsMargins(2, 0, 2, 0);
+    statusLayout->addWidget(m_noticeLabel, 1, Qt::AlignLeft);
+    statusLayout->addWidget(m_trainingStatusLabel, 1, Qt::AlignRight);
+
+    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(16, 16, 16, 16);
+    mainLayout->setSpacing(14);
+    mainLayout->addLayout(contentLayout, 1);
+    mainLayout->addLayout(actionLayout);
+    mainLayout->addLayout(statusLayout);
+
+    connect(m_btnLoad, &QPushButton::clicked, this, &Sudoku_demo::onLoadImage);
+    connect(m_btnRecognize, &QPushButton::clicked, this, &Sudoku_demo::onRecognize);
+    connect(m_btnRetrain, &QPushButton::clicked, this, &Sudoku_demo::onRetrain);
+    connect(m_btnSolve, &QPushButton::clicked, this, &Sudoku_demo::onSolve);
+
+    refreshButtonStates(false, false);
+    setStyleSheet("QWidget { background-color: #F4F6FA; }");
+}
+
+Sudoku_demo::~Sudoku_demo() = default;
+
+QWidget* Sudoku_demo::createPanel(const QString& title, QWidget* content, const QColor& titleColor)
+{
+    QWidget* panel = new QWidget(this);
+    QVBoxLayout* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(10);
+
+    QLabel* titleLabel = new QLabel(title, panel);
+    QFont titleFont("Segoe UI", 13, QFont::Bold);
+    titleLabel->setFont(titleFont);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    titleLabel->setStyleSheet(QString("color: %1; padding: 4px;").arg(titleColor.name()));
+
+    layout->addWidget(titleLabel);
+    layout->addWidget(content, 1, Qt::AlignCenter);
+    return panel;
+}
+
+void Sudoku_demo::configureRecognitionTable()
+{
     m_leftGridTable->horizontalHeader()->setVisible(false);
     m_leftGridTable->verticalHeader()->setVisible(false);
     m_leftGridTable->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_leftGridTable->hide(); // 初始状态下隐藏（即空白）
-    
+    m_leftGridTable->setSelectionBehavior(QAbstractItemView::SelectItems);
+    m_leftGridTable->setEditTriggers(QAbstractItemView::AnyKeyPressed |
+                                     QAbstractItemView::SelectedClicked |
+                                     QAbstractItemView::EditKeyPressed);
+
     for (int i = 0; i < 9; ++i) {
         m_leftGridTable->setRowHeight(i, 40);
         m_leftGridTable->setColumnWidth(i, 40);
     }
     m_leftGridTable->setFixedSize(40 * 9 + 4, 40 * 9 + 4);
-    
     m_leftGridTable->setStyleSheet(
         "QTableWidget {"
         "  background-color: #FFFFFF;"
@@ -70,9 +161,13 @@ Sudoku_demo::Sudoku_demo(QWidget *parent)
         "  font-weight: bold;"
         "  color: #19376D;"
         "}"
+        "QTableWidget::item:selected {"
+        "  background-color: #FFF176;"
+        "  color: #19376D;"
+        "  border: 2px solid #2563EB;"
+        "}"
     );
 
-    // 增加 4 条粗线（2条水平，2条垂直），画出标准的 3x3 宫格样式
     for (int i = 1; i <= 2; ++i) {
         QFrame* vLine = new QFrame(m_leftGridTable->viewport());
         vLine->setStyleSheet("background-color: #19376D;");
@@ -85,190 +180,222 @@ Sudoku_demo::Sudoku_demo(QWidget *parent)
         hLine->setAttribute(Qt::WA_TransparentForMouseEvents);
     }
 
-    // 实时同步：当用户在左侧表格中手动修改数字时，立刻同步到底层的数独数组中
     connect(m_leftGridTable, &QTableWidget::cellChanged, this, [this](int row, int col) {
-        QTableWidgetItem* item = m_leftGridTable->item(row, col);
-        if (item && !item->text().isEmpty()) {
-            m_puzzleData[row][col] = item->text().toInt();
-        } else {
-            m_puzzleData[row][col] = 0;
+        if (m_updatingGrid) {
+            return;
         }
+
+        QTableWidgetItem* item = m_leftGridTable->item(row, col);
+        int value = 0;
+        if (item && !item->text().trimmed().isEmpty()) {
+            value = item->text().toInt();
+            if (value < 0 || value > 9) {
+                value = 0;
+            }
+        }
+
+        m_puzzleData[row][col] = value;
+        m_correctedMask[row][col] = true;
+
+        if (!item) {
+            item = new QTableWidgetItem();
+            m_leftGridTable->setItem(row, col, item);
+        }
+
+        item->setText(value > 0 ? QString::number(value) : QString());
+        item->setTextAlignment(Qt::AlignCenter);
+        item->setBackground(QBrush(QColor("#FFF176")));
+        item->setForeground(QBrush(QColor("#19376D")));
     });
 
-    m_btnLoad = new QPushButton(QStringLiteral("\U0001F4C2 \u52A0\u8F7D\u56FE\u7247\u8BC6\u522B\u6570\u72EC"));
-    m_btnLoad->setMinimumHeight(40);
-    m_btnLoad->setCursor(Qt::PointingHandCursor);
-    m_btnLoad->setStyleSheet(
-        "QPushButton {"
-        "  background-color: #19376D;"
-        "  color: white;"
-        "  border: none;"
-        "  border-radius: 8px;"
-        "  font-size: 14px;"
-        "  font-weight: bold;"
-        "  padding: 8px 16px;"
-        "}"
-        "QPushButton:hover {"
-        "  background-color: #2B4F8C;"
-        "}"
-        "QPushButton:pressed {"
-        "  background-color: #0F2340;"
-        "}"
-    );
+    connect(m_leftGridTable, &QTableWidget::cellClicked, this, [this](int row, int col) {
+        QTableWidgetItem* item = m_leftGridTable->item(row, col);
+        if (!item) {
+            item = new QTableWidgetItem();
+            item->setTextAlignment(Qt::AlignCenter);
+            m_leftGridTable->setItem(row, col, item);
+        }
 
-    leftLayout->addWidget(leftTitle);
-    leftLayout->addWidget(m_leftGridTable, 0, Qt::AlignCenter);
-    leftLayout->addWidget(m_btnLoad);
-
-    // ========== Vertical separator ==========
-    QFrame* separator = new QFrame(this);
-    separator->setFrameShape(QFrame::VLine);
-    separator->setStyleSheet("color: #CDD5E0;");
-
-    // ========== Right panel (solved grid) ==========
-    QVBoxLayout* rightLayout = new QVBoxLayout();
-    rightLayout->setSpacing(10);
-
-    QLabel* rightTitle = new QLabel(QStringLiteral("\u6C42\u89E3\u7ED3\u679C"));
-    rightTitle->setFont(titleFont);
-    rightTitle->setAlignment(Qt::AlignCenter);
-    rightTitle->setStyleSheet("color: #009664; padding: 4px;");
-
-    m_rightGrid = new SudokuGrid(this);
-
-    m_btnSolve = new QPushButton(QStringLiteral("\U0001F9E9 \u6C42\u89E3\u6570\u72EC"));
-    m_btnSolve->setMinimumHeight(40);
-    m_btnSolve->setCursor(Qt::PointingHandCursor);
-    m_btnSolve->setEnabled(false); // disabled until puzzle is loaded
-    m_btnSolve->setStyleSheet(
-        "QPushButton {"
-        "  background-color: #009664;"
-        "  color: white;"
-        "  border: none;"
-        "  border-radius: 8px;"
-        "  font-size: 14px;"
-        "  font-weight: bold;"
-        "  padding: 8px 16px;"
-        "}"
-        "QPushButton:hover {"
-        "  background-color: #00B87A;"
-        "}"
-        "QPushButton:pressed {"
-        "  background-color: #006644;"
-        "}"
-        "QPushButton:disabled {"
-        "  background-color: #B0B8C4;"
-        "}"
-    );
-
-    rightLayout->addWidget(rightTitle);
-    rightLayout->addWidget(m_rightGrid, 1);
-    rightLayout->addWidget(m_btnSolve);
-
-    // ========== Assemble main layout ==========
-    mainLayout->addLayout(leftLayout, 1);
-    mainLayout->addWidget(separator);
-    mainLayout->addLayout(rightLayout, 1);
-
-    // ---- Connect signals ----
-    connect(m_btnLoad, &QPushButton::clicked, this, &Sudoku_demo::onLoadImage);
-    connect(m_btnSolve, &QPushButton::clicked, this, &Sudoku_demo::onSolve);
-
-    // ---- Global stylesheet ----
-    setStyleSheet("QWidget { background-color: #F4F6FA; }");
+        m_leftGridTable->setCurrentCell(row, col);
+        m_leftGridTable->editItem(item);
+    });
 }
 
-Sudoku_demo::~Sudoku_demo()
+void Sudoku_demo::refreshButtonStates(bool hasImage, bool hasRecognition)
 {
+    m_btnRecognize->setEnabled(hasImage);
+    m_btnRetrain->setEnabled(hasRecognition);
+    m_btnSolve->setEnabled(hasRecognition);
 }
 
-// ---- Load image & recognize ----
+void Sudoku_demo::showOriginalImage(const QString& filePath)
+{
+    QPixmap pix(filePath);
+    if (pix.isNull()) {
+        m_originalImageLabel->setText(QStringLiteral("Preview failed"));
+        return;
+    }
+
+    m_originalImageLabel->setPixmap(
+        pix.scaled(m_originalImageLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation)
+    );
+}
+
 void Sudoku_demo::onLoadImage()
 {
     QString filePath = QFileDialog::getOpenFileName(
         this,
-        QStringLiteral("\u9009\u62E9\u6570\u72EC\u56FE\u7247"),
+        QStringLiteral("Select sudoku image"),
         QString(),
         QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp);;All Files (*)")
     );
 
-    if (filePath.isEmpty())
+    if (filePath.isEmpty()) {
         return;
+    }
+
+    m_currentImagePath = filePath;
+    showOriginalImage(filePath);
+    m_leftGridTable->hide();
+    m_rightGrid->clearGrid();
+    m_puzzleData = {};
+    m_correctedMask = {};
+    m_noticeLabel->setText(QStringLiteral("Image loaded. Click Recognize to run OCR."));
+    m_trainingStatusLabel->setText(QStringLiteral("Retrain: idle"));
+    refreshButtonStates(true, false);
+}
+
+void Sudoku_demo::onRecognize()
+{
+    if (m_currentImagePath.isEmpty()) {
+        return;
+    }
 
     SudokuImageRecognizer recognizer;
     cv::Mat warped;
-    int grid[9][9] = { 0 };
+    int grid[9][9] = {};
     std::string diagMsg;
 
-    // 修复：Windows 下 cv::imread 不支持 UTF-8 编码的中文路径，需要转换为 Local8Bit (例如 GBK)
-    std::string localPath = filePath.toLocal8Bit().constData();
+    std::string localPath = m_currentImagePath.toLocal8Bit().constData();
     bool ok = recognizer.processImage(localPath, warped, grid, diagMsg);
-
-    if (!ok)
-    {
-        QString msg = QString::fromStdString(diagMsg);
+    if (!ok) {
+        m_noticeLabel->setText(QStringLiteral("Recognition failed."));
         QMessageBox::warning(this,
-                             QStringLiteral("识别失败"),
-                             QStringLiteral("没有识别到数独盘面。\n\n诊断信息：\n") + msg);
+                             QStringLiteral("Recognition failed"),
+                             QStringLiteral("No sudoku board was recognized.\n\nDiagnostics:\n") +
+                                 QString::fromStdString(diagMsg));
         return;
     }
 
-    // 将识别到的网格填充到左侧表格中（等待用户校对和补充）
+    fillRecognitionTable(grid);
+    m_leftGridTable->show();
+    m_rightGrid->clearGrid();
+    m_noticeLabel->setText(QStringLiteral("Recognition complete. Click a cell and type 0-9 to correct it."));
+    m_trainingStatusLabel->setText(QStringLiteral("Retrain: idle"));
+    refreshButtonStates(true, true);
+}
+
+void Sudoku_demo::fillRecognitionTable(int grid[9][9])
+{
+    m_updatingGrid = true;
+    m_leftGridTable->clearContents();
+    m_puzzleData = {};
+    m_correctedMask = {};
+
     for (int r = 0; r < 9; ++r) {
         for (int c = 0; c < 9; ++c) {
-            if (grid[r][c] != 0) {
-                // 已接入 MNIST 模型，现在能直接填写真实的识别数字
-                QTableWidgetItem* item = new QTableWidgetItem(QString::number(grid[r][c]));
-                item->setTextAlignment(Qt::AlignCenter);
-                item->setForeground(QBrush(QColor(25, 55, 109))); // 深蓝色表示识别出的原生数字
-                m_leftGridTable->setItem(r, c, item);
-            } else {
-                QTableWidgetItem* item = new QTableWidgetItem("");
-                item->setTextAlignment(Qt::AlignCenter);
-                m_leftGridTable->setItem(r, c, item);
-            }
+            int value = grid[r][c];
+            m_puzzleData[r][c] = value;
+
+            QTableWidgetItem* item = new QTableWidgetItem(value > 0 ? QString::number(value) : QString());
+            item->setTextAlignment(Qt::AlignCenter);
+            item->setForeground(QBrush(QColor("#19376D")));
+            item->setBackground(QBrush(Qt::white));
+            m_leftGridTable->setItem(r, c, item);
         }
     }
-    
-    // 显示左侧识别后的网格
-    m_leftGridTable->show();
 
-    // Enable solve button
-    m_btnSolve->setEnabled(true);
+    m_updatingGrid = false;
+}
 
-    // Clear the right grid
-    m_rightGrid->clearGrid();
+bool Sudoku_demo::readCurrentPuzzle(std::array<std::array<int, 9>, 9>& puzzle)
+{
+    puzzle = {};
+    for (int r = 0; r < 9; ++r) {
+        for (int c = 0; c < 9; ++c) {
+            QTableWidgetItem* item = m_leftGridTable->item(r, c);
+            int value = 0;
+            if (item && !item->text().trimmed().isEmpty()) {
+                bool ok = false;
+                value = item->text().toInt(&ok);
+                if (!ok || value < 0 || value > 9) {
+                    QMessageBox::warning(this,
+                                         QStringLiteral("Invalid input"),
+                                         QStringLiteral("OCR result cells only accept values from 0 to 9."));
+                    return false;
+                }
+            }
+            puzzle[r][c] = value;
+        }
+    }
+    return true;
 }
 
 void Sudoku_demo::onSolve()
 {
-    // 从左侧表格中读取用户校对后的数字
+    std::array<std::array<int, 9>, 9> puzzle{};
+    if (!readCurrentPuzzle(puzzle)) {
+        return;
+    }
+
+    m_puzzleData = puzzle;
+    auto solution = puzzle;
+    if (!SudokuSolver::solve(solution)) {
+        m_noticeLabel->setText(QStringLiteral("Solve failed. Continue correcting OCR cells."));
+        QMessageBox::warning(this,
+                             QStringLiteral("Solve failed"),
+                             QStringLiteral("Unable to solve this sudoku. Please continue correcting the OCR result."));
+        return;
+    }
+
+    std::array<std::array<bool, 9>, 9> mask{};
     for (int r = 0; r < 9; ++r) {
         for (int c = 0; c < 9; ++c) {
-            QTableWidgetItem* item = m_leftGridTable->item(r, c);
-            if (item && !item->text().isEmpty()) {
-                m_puzzleData[r][c] = item->text().toInt();
-            } else {
-                m_puzzleData[r][c] = 0;
-            }
+            mask[r][c] = (puzzle[r][c] != 0);
         }
     }
 
-    // Copy puzzle data and solve
-    auto solution = m_puzzleData;
+    m_rightGrid->setGrid(solution);
+    m_rightGrid->setGivenMask(mask);
+    m_noticeLabel->setText(QStringLiteral("Solved."));
+}
 
-    if (SudokuSolver::solve(solution)) {
-        // Build given mask from original puzzle
-        std::array<std::array<bool, 9>, 9> mask{};
-        for (int r = 0; r < 9; ++r)
-            for (int c = 0; c < 9; ++c)
-                mask[r][c] = (m_puzzleData[r][c] != 0);
-
-        m_rightGrid->setGrid(solution);
-        m_rightGrid->setGivenMask(mask);
-    } else {
-        QMessageBox::warning(this,
-                             QStringLiteral("\u6C42\u89E3\u5931\u8D25"),
-                             QStringLiteral("\u65E0\u6CD5\u6C42\u89E3\u8BE5\u6570\u72EC\uFF0C\u8BF7\u68C0\u67E5\u8F93\u5165\u662F\u5426\u6B63\u786E\u3002"));
+void Sudoku_demo::onRetrain()
+{
+    std::array<std::array<int, 9>, 9> puzzle{};
+    if (!readCurrentPuzzle(puzzle)) {
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: invalid input"));
+        return;
     }
+
+    m_trainingStatusLabel->setText(QStringLiteral("Retrain: validating board..."));
+
+    auto solution = puzzle;
+    if (!SudokuSolver::solve(solution)) {
+        m_noticeLabel->setText(QStringLiteral("Current board is unsolvable. Continue fixing OCR errors."));
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: blocked"));
+        return;
+    }
+
+    std::array<std::array<bool, 9>, 9> mask{};
+    for (int r = 0; r < 9; ++r) {
+        for (int c = 0; c < 9; ++c) {
+            mask[r][c] = (puzzle[r][c] != 0);
+        }
+    }
+    m_rightGrid->setGrid(solution);
+    m_rightGrid->setGivenMask(mask);
+
+    m_noticeLabel->setText(QStringLiteral("Board validated and solution rendered."));
+    m_trainingStatusLabel->setText(QStringLiteral("Retrain: not connected yet"));
 }
