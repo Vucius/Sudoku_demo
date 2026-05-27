@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+env:
+  # Avoid the deprecated/removed x-gha vcpkg binary cache backend. If an action
+  # enables it internally, the exported cache variables below still keep it valid.
+  VCPKG_BINARY_SOURCES: "clear"
+
 jobs:
   windows-installer:
     name: Windows installer
@@ -30,6 +35,13 @@ jobs:
           host: "windows"
           target: "desktop"
           arch: "win64_msvc2019_64"
+
+      - name: Export GitHub Actions cache variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -104,6 +116,13 @@ jobs:
           version: "6.7.0"
           host: "mac"
           target: "desktop"
+
+      - name: Export GitHub Actions cache variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
