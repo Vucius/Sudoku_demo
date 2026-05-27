@@ -14,16 +14,32 @@ env:
 jobs:
   windows-installer:
     name: Windows installer (${{ matrix.suffix }})
-    runs-on: windows-2022
+    runs-on: ${{ matrix.runner }}
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - suffix: Windows-x64
+            runner: windows-2022
             cmake_arch: x64
             vcpkg_triplet: x64-windows
-            qt_arch: win64_msvc2019_64
+            qt_arch: win64_msvc2022_64
+            qt_version: 6.11.0
+            experimental: false
+          - suffix: Windows-x86
+            runner: windows-2022
+            cmake_arch: Win32
+            vcpkg_triplet: x86-windows
+            qt_arch: win32_msvc2019
+            qt_version: 6.11.0
+            experimental: false
+          - suffix: Windows-arm64
+            runner: windows-11-arm
+            cmake_arch: ARM64
+            vcpkg_triplet: arm64-windows
+            qt_arch: win64_msvc2022_arm64
+            qt_version: 6.11.0
             experimental: false
 
     steps:
@@ -39,7 +55,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.7.0"
+          version: ${{ matrix.qt_version }}
           host: "windows"
           target: "desktop"
           arch: ${{ matrix.qt_arch }}

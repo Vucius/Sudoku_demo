@@ -77,9 +77,9 @@ OCR_Model/custom_model.onnx
 
 ### C++ Application
 
-- Windows x64
+- Windows x64, x86, or ARM64
 - Visual Studio 2022 with MSVC v143
-- Qt 6 for MSVC 2022 64-bit
+- Qt 6 for MSVC
 - Qt Visual Studio Tools / Qt MSBuild support
 - OpenCV 4, supplied through vcpkg integration in this project
 
@@ -138,12 +138,14 @@ Tagged pushes such as `v1.0.0` run `.github/workflows/release.yml`.
 The workflow publishes:
 
 - `Sudoku_Demo-Windows-x64-Setup.exe`
+- `Sudoku_Demo-Windows-x86-Setup.exe`
+- `Sudoku_Demo-Windows-arm64-Setup.exe`
 - `Sudoku_Demo-macOS-x64.dmg`
 - `Sudoku_Demo-macOS-arm64.dmg`
 
-Windows packaging uses Inno Setup through `installer.iss`. The Windows installer runs `windeployqt --compiler-runtime` during CI packaging so Qt DLLs, plugins, and the MSVC runtime DLLs are collected into the installer payload. macOS packaging creates a Qt `.app` bundle and wraps it with `macdeployqt -dmg`.
+Windows packaging uses Inno Setup through `installer.iss`. The Windows release workflow currently uses Qt 6.11.0: x64 runs on `windows-2022` with `win64_msvc2022_64`, and ARM64 runs natively on `windows-11-arm` with `win64_msvc2022_arm64`. The Windows installer runs `windeployqt --compiler-runtime` during CI packaging so Qt DLLs, plugins, and the MSVC runtime DLLs are collected into the installer payload. macOS packaging creates a Qt `.app` bundle and wraps it with `macdeployqt -dmg`.
 
-Note: macOS packaging is provided on a best-effort basis. The author does not currently have access to a macOS machine or macOS virtual machine, so macOS builds and runtime behavior have not been personally verified. Windows x64 is the primary tested platform. Windows ARM64, Windows x86, and macOS Universal builds are not currently produced because the configured CI route depends on official Qt/vcpkg toolchain support that varies by runner image and architecture. The release workflow currently uses Qt 6.7.0; Qt 6.10+ starts providing ARM64 binary packages for more Qt modules such as Qt WebEngine, but this project is not on that version yet, so the Windows ARM64 installer is intentionally omitted for now.
+Note: macOS packaging is provided on a best-effort basis. The author does not currently have access to a macOS machine or macOS virtual machine, so macOS builds and runtime behavior have not been personally verified. Windows x64 is the primary tested platform. macOS Universal builds are not currently produced because this workflow publishes separate Intel and Apple-Silicon DMG files. Qt 6.10+ starts providing ARM64 binary packages for more Qt modules such as Qt WebEngine; this workflow uses Qt 6.11.0, so Windows ARM64 is included.
 
 The bundled OCR model is installed with the application. If the user retrains the model, updated model files are written to the current user's application data directory and are preferred on the next recognition run.
 
