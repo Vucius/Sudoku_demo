@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <opencv2/core/cuda.hpp>
 #include <utility>
 
@@ -28,12 +29,19 @@ std::pair<int, double> argmaxSoftmax(const cv::Mat& logits)
 
 SudokuImageRecognizer::SudokuImageRecognizer()
 {
-    QString modelPath = QCoreApplication::applicationDirPath() + "/OCR_Model/custom_model.onnx";
+    QString modelPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+                        "/OCR_Model/custom_model.onnx";
+    if (!QFileInfo::exists(modelPath)) {
+        modelPath = QCoreApplication::applicationDirPath() + "/OCR_Model/custom_model.onnx";
+    }
     if (!QFileInfo::exists(modelPath)) {
         modelPath = "OCR_Model/custom_model.onnx";
     }
     if (!QFileInfo::exists(modelPath)) {
         modelPath = QCoreApplication::applicationDirPath() + "/../../OCR_Model/custom_model.onnx";
+    }
+    if (!QFileInfo::exists(modelPath)) {
+        modelPath = QCoreApplication::applicationDirPath() + "/../Resources/OCR_Model/custom_model.onnx";
     }
 
     try {

@@ -14,6 +14,7 @@
 #include <QPixmap>
 #include <QCloseEvent>
 #include <QRegularExpression>
+#include <QStandardPaths>
 
 namespace {
 QString resolveProjectDir()
@@ -29,7 +30,23 @@ QString resolveProjectDir()
         return appDir.absolutePath();
     }
 
+    QDir macResources(QCoreApplication::applicationDirPath());
+    if (QFileInfo::exists(macResources.filePath("../Resources/OCR_Model/retrain_custom_model.py"))) {
+        macResources.cd("../Resources");
+        return macResources.absolutePath();
+    }
+
     return current;
+}
+
+QString resolveWritableDataDir()
+{
+    QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (dataDir.isEmpty()) {
+        dataDir = QDir::homePath() + "/.sudoku_demo";
+    }
+    QDir().mkpath(dataDir);
+    return dataDir;
 }
 }
 
@@ -456,7 +473,7 @@ bool Sudoku_demo::saveTrainingSamples(const cv::Mat& warpedColor,
         return false;
     }
 
-    const QString root = resolveProjectDir() + "/OCR_Model/retrain_data/train";
+    const QString root = resolveWritableDataDir() + "/OCR_Model/retrain_data/train";
     QDir rootDir(root);
     if (!rootDir.exists() && !rootDir.mkpath(".")) {
         errorMessage = QStringLiteral("Failed to create retrain data directory.");
@@ -509,10 +526,16 @@ void Sudoku_demo::startTrainingProcess(const QString& retrainDataDir)
     }
 
     QString projectDir = resolveProjectDir();
+    QString writableDir = resolveWritableDataDir();
 
     QString pythonExe = projectDir + "/.venv/Scripts/python.exe";
     if (!QFileInfo::exists(pythonExe)) {
         pythonExe = QStringLiteral("python");
+    }
+
+    QString basePth = writableDir + "/OCR_Model/custom_model.pth";
+    if (!QFileInfo::exists(basePth)) {
+        basePth = projectDir + "/OCR_Model/custom_model.pth";
     }
 
     QString scriptPath = projectDir + "/OCR_Model/retrain_custom_model.py";
@@ -520,9 +543,9 @@ void Sudoku_demo::startTrainingProcess(const QString& retrainDataDir)
     args << scriptPath
          << "--base-data" << (projectDir + "/Character_Sample")
          << "--retrain-data" << retrainDataDir
-         << "--base-pth" << (projectDir + "/OCR_Model/custom_model.pth")
-         << "--output-pth" << (projectDir + "/OCR_Model/custom_model.pth")
-         << "--output-onnx" << (projectDir + "/OCR_Model/custom_model.onnx")
+         << "--base-pth" << basePth
+         << "--output-pth" << (writableDir + "/OCR_Model/custom_model.pth")
+         << "--output-onnx" << (writableDir + "/OCR_Model/custom_model.onnx")
          << "--epochs" << "12";
 
     m_trainingProcess = new QProcess(this);

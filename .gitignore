@@ -27,6 +27,7 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
+[Bb]uild/
 [Bb]in/
 [Oo]bj/
 [Oo]ut/
@@ -391,3 +392,9 @@ OCR_Model/english_g2_jpqd.onnx
 OCR_Model/mnist-12.onnx
 OCR_Model/model-122000.pth
 OCR_Model/svhn_final_simple.onnx
+
+# Release packaging outputs
+release_pkg/
+Sudoku_demo_Setup.exe
+Sudoku_Demo-*.exe
+Sudoku_Demo-*.dmg

@@ -5,16 +5,19 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
-  build:
-    runs-on: windows-latest
-    permissions:
-      contents: write
+  windows-installer:
+    name: Windows installer
+    runs-on: windows-2022
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           submodules: recursive
 
       - name: Setup MSBuild
@@ -23,56 +26,111 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.0'
-          host: 'windows'
-          target: 'desktop'
-          arch: 'win64_msvc2019_64'
+          version: "6.7.0"
+          host: "windows"
+          target: "desktop"
+          arch: "win64_msvc2019_64"
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: "b02e341c927f16d991edbd915d8ea43eac52096c"
 
-      - name: Setup QtMsBuild
+      - name: Configure
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://download.qt.io/official_releases/vsaddin/3.5.0/qt-vsaddin-msvc2022-x64-3.5.0.vsix" -OutFile "qtvsaddin.zip"
-          Expand-Archive -Path "qtvsaddin.zip" -DestinationPath "qtvsaddin" -Force
-          Copy-Item -Path "qtvsaddin\QtMSBuild" -Destination "QtMsBuild" -Recurse
+          cmake -S . -B build `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DCMAKE_PREFIX_PATH="$env:Qt6_DIR"
 
       - name: Build
-        run: |
-          msbuild Sudoku_demo.vcxproj `
-            /p:Configuration=Release `
-            /p:Platform=x64 `
-            /p:VcpkgEnabled=true `
-            /p:VcpkgEnableManifest=true `
-            /p:QtInstallDir="$env:QT_ROOT_DIR" `
-            /p:QtToolsPath="$env:QT_ROOT_DIR\bin" `
-            /m
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
 
-      - name: Package
+      - name: Package app directory
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path release_pkg
-          Copy-Item x64\Release\Sudoku_demo.exe release_pkg\
-          # 复制 vcpkg 依赖的 DLL (如 OpenCV)
-          if (Test-Path "x64\Release\*.dll") {
-            Copy-Item x64\Release\*.dll release_pkg\
+          New-Item -ItemType Directory -Path release_pkg -Force
+          Copy-Item build\Release\Sudoku_demo.exe release_pkg\
+          Copy-Item build\Release\Character_Sample release_pkg\ -Recurse
+          Copy-Item build\Release\OCR_Model release_pkg\ -Recurse
+          Copy-Item build\Release\Sudoku_Sample release_pkg\ -Recurse
+          if (Test-Path "build\Release\*.dll") {
+            Copy-Item build\Release\*.dll release_pkg\
           }
-          # 复制需要的资源文件夹
-          Copy-Item -Path Character_Sample, OCR_Model, Sudoku_Sample -Destination release_pkg\ -Recurse
-          # 使用 windeployqt 收集 Qt 依赖
           windeployqt --release --dir release_pkg release_pkg\Sudoku_demo.exe
 
-      - name: Build Installer
+      - name: Build installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
           path: installer.iss
 
-      - name: Create Release
+      - name: Rename installer
+        shell: pwsh
+        run: |
+          Rename-Item Sudoku_demo_Setup.exe Sudoku_Demo-Windows-x64-Setup.exe
+
+      - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: Sudoku_demo_Setup.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: Sudoku_Demo-Windows-x64-Setup.exe
+
+  macos-dmg:
+    name: macOS DMG (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Intel
+            runner: macos-13
+            suffix: macOS-x64
+          - name: Apple-Silicon
+            runner: macos-14
+            suffix: macOS-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          submodules: recursive
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.0"
+          host: "mac"
+          target: "desktop"
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "b02e341c927f16d991edbd915d8ea43eac52096c"
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DCMAKE_PREFIX_PATH="$Qt6_DIR"
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release --parallel
+
+      - name: Build DMG
+        shell: bash
+        run: |
+          macdeployqt build/Sudoku_demo.app -dmg
+          DMG_PATH="$(find . -maxdepth 3 -name 'Sudoku_demo.dmg' -print -quit)"
+          test -n "$DMG_PATH"
+          mv "$DMG_PATH" "Sudoku_Demo-${{ matrix.suffix }}.dmg"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Sudoku_Demo-${{ matrix.suffix }}.dmg

@@ -112,13 +112,38 @@ If that file does not exist, it falls back to `python` from `PATH`.
 
 ## Build and Run
 
+### Windows / Visual Studio
+
 1. Open `Sudoku_demo.slnx` or `Sudoku_demo.vcxproj` in Visual Studio.
 2. Select `x64` and either `Debug` or `Release`.
 3. Make sure Qt VS Tools can resolve the configured Qt installation.
 4. Build the project.
 5. Run the generated executable from Visual Studio.
 
+### Cross-Platform / CMake
+
+The release workflow uses CMake so the same source can be built on Windows and macOS:
+
+```text
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+
 For image recognition to work, `OCR_Model/custom_model.onnx` must be reachable from either the working directory or the app directory layout expected by `SudokuImageRecognizer`.
+
+## Release Packaging
+
+Tagged pushes such as `v1.0.0` run `.github/workflows/release.yml`.
+
+The workflow publishes:
+
+- `Sudoku_Demo-Windows-x64-Setup.exe`
+- `Sudoku_Demo-macOS-x64.dmg`
+- `Sudoku_Demo-macOS-arm64.dmg`
+
+Windows packaging uses Inno Setup through `installer.iss`. macOS packaging creates a Qt `.app` bundle and wraps it with `macdeployqt -dmg`.
+
+The bundled OCR model is installed with the application. If the user retrains the model, updated model files are written to the current user's application data directory and are preferred on the next recognition run.
 
 ## Manual Test Procedure
 
