@@ -138,14 +138,12 @@ Tagged pushes such as `v1.0.0` run `.github/workflows/release.yml`.
 The workflow publishes:
 
 - `Sudoku_Demo-Windows-x64-Setup.exe`
-- `Sudoku_Demo-Windows-arm64-Setup.exe`
 - `Sudoku_Demo-macOS-x64.dmg`
 - `Sudoku_Demo-macOS-arm64.dmg`
-- `Sudoku_Demo-macOS-universal.dmg`
 
 Windows packaging uses Inno Setup through `installer.iss`. The Windows installer runs `windeployqt --compiler-runtime` during CI packaging so Qt DLLs, plugins, and the MSVC runtime DLLs are collected into the installer payload. macOS packaging creates a Qt `.app` bundle and wraps it with `macdeployqt -dmg`.
 
-Note: macOS packaging is provided on a best-effort basis. The author does not currently have access to a macOS machine or macOS virtual machine, so macOS builds and runtime behavior have not been personally verified. Windows x64 is the primary tested platform. Windows ARM64 and macOS Universal builds are configured as experimental CI targets because they depend on Qt/vcpkg toolchain support that may vary by runner image. Windows x86 is not currently produced because this Qt 6 based project relies on official prebuilt Qt packages, and the configured CI route does not provide a reliable 32-bit Qt 6 package.
+Note: macOS packaging is provided on a best-effort basis. The author does not currently have access to a macOS machine or macOS virtual machine, so macOS builds and runtime behavior have not been personally verified. Windows x64 is the primary tested platform. Windows ARM64, Windows x86, and macOS Universal builds are not currently produced because the configured CI route depends on official Qt/vcpkg toolchain support that varies by runner image and architecture. The release workflow currently uses Qt 6.7.0; Qt 6.10+ starts providing ARM64 binary packages for more Qt modules such as Qt WebEngine, but this project is not on that version yet, so the Windows ARM64 installer is intentionally omitted for now.
 
 The bundled OCR model is installed with the application. If the user retrains the model, updated model files are written to the current user's application data directory and are preferred on the next recognition run.
 

@@ -25,11 +25,6 @@ jobs:
             vcpkg_triplet: x64-windows
             qt_arch: win64_msvc2019_64
             experimental: false
-          - suffix: Windows-arm64
-            cmake_arch: ARM64
-            vcpkg_triplet: arm64-windows
-            qt_arch: win64_msvc2022_arm64
-            experimental: true
 
     steps:
       - name: Checkout
@@ -74,7 +69,7 @@ jobs:
           path: |
             vcpkg_installed
             vcpkg_cache
-          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-b02e341c927f16d991edbd915d8ea43eac52096c-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', 'triplets/**') }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-b02e341c927f16d991edbd915d8ea43eac52096c-${{ hashFiles('vcpkg.json', 'CMakeLists.txt') }}
           restore-keys: |
             vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-
 
@@ -134,7 +129,7 @@ jobs:
       matrix:
         include:
           - name: Intel
-            runner: macos-13
+            runner: macos-15-intel
             suffix: macOS-x64
             cmake_architectures: x86_64
             vcpkg_triplet: x64-osx
@@ -145,12 +140,6 @@ jobs:
             cmake_architectures: arm64
             vcpkg_triplet: arm64-osx
             experimental: false
-          - name: Universal
-            runner: macos-14
-            suffix: macOS-universal
-            cmake_architectures: "x86_64;arm64"
-            vcpkg_triplet: universal-osx
-            experimental: true
 
     steps:
       - name: Checkout
@@ -191,7 +180,7 @@ jobs:
           path: |
             vcpkg_installed
             vcpkg_cache
-          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-b02e341c927f16d991edbd915d8ea43eac52096c-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', 'triplets/**') }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-b02e341c927f16d991edbd915d8ea43eac52096c-${{ hashFiles('vcpkg.json', 'CMakeLists.txt') }}
           restore-keys: |
             vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-
 
@@ -206,7 +195,6 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
-            -DVCPKG_OVERLAY_TRIPLETS="$PWD/triplets" \
             -DVCPKG_TARGET_TRIPLET="${{ matrix.vcpkg_triplet }}" \
             -DCMAKE_OSX_ARCHITECTURES="${{ matrix.cmake_architectures }}" \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
