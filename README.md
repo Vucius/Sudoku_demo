@@ -143,6 +143,8 @@ The workflow publishes:
 
 Windows packaging uses Inno Setup through `installer.iss`. macOS packaging creates a Qt `.app` bundle and wraps it with `macdeployqt -dmg`.
 
+Note: macOS packaging is provided on a best-effort basis. The author does not currently have access to a macOS machine or macOS virtual machine, so macOS builds and runtime behavior have not been personally verified. Windows is the primary tested platform.
+
 The bundled OCR model is installed with the application. If the user retrains the model, updated model files are written to the current user's application data directory and are preferred on the next recognition run.
 
 ## Manual Test Procedure
