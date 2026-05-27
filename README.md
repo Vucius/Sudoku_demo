@@ -137,13 +137,16 @@ Tagged pushes such as `v1.0.0` run `.github/workflows/release.yml`.
 
 The workflow publishes:
 
+- `Sudoku_Demo-Windows-x86-Setup.exe`
 - `Sudoku_Demo-Windows-x64-Setup.exe`
+- `Sudoku_Demo-Windows-arm64-Setup.exe`
 - `Sudoku_Demo-macOS-x64.dmg`
 - `Sudoku_Demo-macOS-arm64.dmg`
+- `Sudoku_Demo-macOS-universal.dmg`
 
 Windows packaging uses Inno Setup through `installer.iss`. macOS packaging creates a Qt `.app` bundle and wraps it with `macdeployqt -dmg`.
 
-Note: macOS packaging is provided on a best-effort basis. The author does not currently have access to a macOS machine or macOS virtual machine, so macOS builds and runtime behavior have not been personally verified. Windows is the primary tested platform.
+Note: macOS packaging is provided on a best-effort basis. The author does not currently have access to a macOS machine or macOS virtual machine, so macOS builds and runtime behavior have not been personally verified. Windows x64 is the primary tested platform. Windows x86, Windows ARM64, and macOS Universal builds are configured as experimental CI targets because they depend on Qt/vcpkg toolchain support that may vary by runner image.
 
 The bundled OCR model is installed with the application. If the user retrains the model, updated model files are written to the current user's application data directory and are preferred on the next recognition run.
 

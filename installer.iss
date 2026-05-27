@@ -7,8 +7,6 @@ OutputDir=.
 OutputBaseFilename=Sudoku_demo_Setup
 Compression=lzma2
 SolidCompression=yes
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 
