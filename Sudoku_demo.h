@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QImage>
 #include <QLabel>
+#include <QProcess>
 #include <QPushButton>
 #include <QColor>
 #include <QTableWidget>
@@ -14,6 +15,8 @@
 #include "SudokuGrid.h"
 #include "SudokuImageRecognizer.h"
 #include "SudokuSolver.h"
+
+class QCloseEvent;
 
 class Sudoku_demo : public QWidget
 {
@@ -27,7 +30,13 @@ private slots:
     void onLoadImage();
     void onRecognize();
     void onRetrain();
+    void onTrainingOutput();
+    void onTrainingError();
+    void onTrainingFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onSolve();
+
+protected:
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     QLabel* m_originalImageLabel = nullptr;
@@ -40,6 +49,8 @@ private:
     QPushButton* m_btnSolve = nullptr;
     QLabel* m_noticeLabel = nullptr;
     QLabel* m_trainingStatusLabel = nullptr;
+    QProcess* m_trainingProcess = nullptr;
+    bool m_trainingInterrupted = false;
 
     QString m_currentImagePath;
     bool m_updatingGrid = false;
@@ -54,4 +65,10 @@ private:
     void refreshButtonStates(bool hasImage, bool hasRecognition);
     bool readCurrentPuzzle(std::array<std::array<int, 9>, 9>& puzzle);
     void showOriginalImage(const QString& filePath);
+    bool saveTrainingSamples(const cv::Mat& warpedColor,
+                             const std::array<std::array<int, 9>, 9>& puzzle,
+                             const std::array<std::array<int, 9>, 9>& solvedBoard,
+                             QString& retrainDataDir,
+                             QString& errorMessage);
+    void startTrainingProcess(const QString& retrainDataDir);
 };

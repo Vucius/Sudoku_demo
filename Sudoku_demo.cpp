@@ -2,12 +2,36 @@
 
 #include <QBrush>
 #include <QColor>
+#include <QCoreApplication>
+#include <QDateTime>
+#include <QDir>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFont>
 #include <QFrame>
 #include <QList>
 #include <QMessageBox>
 #include <QPixmap>
+#include <QCloseEvent>
+#include <QRegularExpression>
+
+namespace {
+QString resolveProjectDir()
+{
+    QString current = QDir::currentPath();
+    if (QFileInfo::exists(current + "/OCR_Model/retrain_custom_model.py")) {
+        return current;
+    }
+
+    QDir appDir(QCoreApplication::applicationDirPath());
+    if (QFileInfo::exists(appDir.filePath("../../OCR_Model/retrain_custom_model.py"))) {
+        appDir.cd("../..");
+        return appDir.absolutePath();
+    }
+
+    return current;
+}
+}
 
 QImage Sudoku_demo::matToQImage(const cv::Mat& mat)
 {
@@ -396,6 +420,210 @@ void Sudoku_demo::onRetrain()
     m_rightGrid->setGrid(solution);
     m_rightGrid->setGivenMask(mask);
 
-    m_noticeLabel->setText(QStringLiteral("Board validated and solution rendered."));
-    m_trainingStatusLabel->setText(QStringLiteral("Retrain: not connected yet"));
+    SudokuImageRecognizer recognizer;
+    cv::Mat warped;
+    int ignoredGrid[9][9] = {};
+    std::string diagMsg;
+    std::string localPath = m_currentImagePath.toLocal8Bit().constData();
+    if (!recognizer.processImage(localPath, warped, ignoredGrid, diagMsg)) {
+        m_noticeLabel->setText(QStringLiteral("Could not prepare training samples."));
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: failed"));
+        return;
+    }
+
+    QString retrainDataDir;
+    QString errorMessage;
+    if (!saveTrainingSamples(warped, puzzle, solution, retrainDataDir, errorMessage)) {
+        m_noticeLabel->setText(errorMessage);
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: failed"));
+        return;
+    }
+
+    m_noticeLabel->setText(QStringLiteral("Board validated. Training samples saved."));
+    startTrainingProcess(retrainDataDir);
+}
+
+bool Sudoku_demo::saveTrainingSamples(const cv::Mat& warpedColor,
+                                      const std::array<std::array<int, 9>, 9>& puzzle,
+                                      const std::array<std::array<int, 9>, 9>& solvedBoard,
+                                      QString& retrainDataDir,
+                                      QString& errorMessage)
+{
+    Q_UNUSED(solvedBoard);
+
+    if (warpedColor.empty()) {
+        errorMessage = QStringLiteral("No warped board image available.");
+        return false;
+    }
+
+    const QString root = resolveProjectDir() + "/OCR_Model/retrain_data/train";
+    QDir rootDir(root);
+    if (!rootDir.exists() && !rootDir.mkpath(".")) {
+        errorMessage = QStringLiteral("Failed to create retrain data directory.");
+        return false;
+    }
+
+    const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss_zzz");
+    const int cellSize = warpedColor.rows / 9;
+
+    for (int label = 0; label <= 9; ++label) {
+        rootDir.mkpath(QString::number(label));
+    }
+
+    for (int r = 0; r < 9; ++r) {
+        for (int c = 0; c < 9; ++c) {
+            int label = puzzle[r][c];
+            if (label < 1 || label > 9) {
+                continue;
+            }
+
+            int margin = 4;
+            cv::Rect roi(c * cellSize + margin,
+                         r * cellSize + margin,
+                         cellSize - 2 * margin,
+                         cellSize - 2 * margin);
+            cv::Mat cell = warpedColor(roi).clone();
+
+            QString filePath = QString("%1/%2/%3_r%4_c%5.png")
+                .arg(root)
+                .arg(label)
+                .arg(stamp)
+                .arg(r)
+                .arg(c);
+            if (!cv::imwrite(filePath.toLocal8Bit().constData(), cell)) {
+                errorMessage = QStringLiteral("Failed to write training sample.");
+                return false;
+            }
+        }
+    }
+
+    retrainDataDir = root;
+    return true;
+}
+
+void Sudoku_demo::startTrainingProcess(const QString& retrainDataDir)
+{
+    if (m_trainingProcess && m_trainingProcess->state() != QProcess::NotRunning) {
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: already running"));
+        return;
+    }
+
+    QString projectDir = resolveProjectDir();
+
+    QString pythonExe = projectDir + "/.venv/Scripts/python.exe";
+    if (!QFileInfo::exists(pythonExe)) {
+        pythonExe = QStringLiteral("python");
+    }
+
+    QString scriptPath = projectDir + "/OCR_Model/retrain_custom_model.py";
+    QStringList args;
+    args << scriptPath
+         << "--base-data" << (projectDir + "/Character_Sample")
+         << "--retrain-data" << retrainDataDir
+         << "--base-pth" << (projectDir + "/OCR_Model/custom_model.pth")
+         << "--output-pth" << (projectDir + "/OCR_Model/custom_model.pth")
+         << "--output-onnx" << (projectDir + "/OCR_Model/custom_model.onnx")
+         << "--epochs" << "12";
+
+    m_trainingProcess = new QProcess(this);
+    m_trainingProcess->setWorkingDirectory(projectDir);
+    m_trainingInterrupted = false;
+    connect(m_trainingProcess, &QProcess::readyReadStandardOutput,
+            this, &Sudoku_demo::onTrainingOutput);
+    connect(m_trainingProcess, &QProcess::readyReadStandardError,
+            this, &Sudoku_demo::onTrainingError);
+    connect(m_trainingProcess, &QProcess::finished,
+            this, &Sudoku_demo::onTrainingFinished);
+
+    m_btnRetrain->setEnabled(false);
+    m_btnRecognize->setEnabled(false);
+    m_trainingStatusLabel->setText(QStringLiteral("Retrain: running..."));
+    m_trainingProcess->start(pythonExe, args);
+}
+
+void Sudoku_demo::onTrainingOutput()
+{
+    if (!m_trainingProcess) {
+        return;
+    }
+
+    QString text = QString::fromLocal8Bit(m_trainingProcess->readAllStandardOutput());
+    static const QRegularExpression epochPattern("epoch=(\\d+)/(\\d+)\\s+loss=([0-9.]+)\\s+acc=([0-9.]+)%");
+    QRegularExpressionMatchIterator it = epochPattern.globalMatch(text);
+    QRegularExpressionMatch lastMatch;
+    while (it.hasNext()) {
+        lastMatch = it.next();
+    }
+
+    if (lastMatch.hasMatch()) {
+        m_trainingStatusLabel->setText(
+            QStringLiteral("Retrain: epoch %1/%2, loss %3, acc %4%")
+                .arg(lastMatch.captured(1))
+                .arg(lastMatch.captured(2))
+                .arg(lastMatch.captured(3))
+                .arg(lastMatch.captured(4))
+        );
+    } else if (text.contains("saved_onnx=")) {
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: exporting complete"));
+    }
+}
+
+void Sudoku_demo::onTrainingError()
+{
+    if (!m_trainingProcess) {
+        return;
+    }
+
+    QString text = QString::fromLocal8Bit(m_trainingProcess->readAllStandardError()).trimmed();
+    if (!text.isEmpty()) {
+        m_noticeLabel->setText(QStringLiteral("Retrain log: ") + text.left(180));
+    }
+}
+
+void Sudoku_demo::onTrainingFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    QString stdoutText;
+    QString stderrText;
+    if (m_trainingProcess) {
+        stdoutText = QString::fromLocal8Bit(m_trainingProcess->readAllStandardOutput());
+        stderrText = QString::fromLocal8Bit(m_trainingProcess->readAllStandardError());
+        m_trainingProcess->deleteLater();
+        m_trainingProcess = nullptr;
+    }
+
+    if (m_trainingInterrupted) {
+        m_noticeLabel->setText(QStringLiteral("Retrain interrupted. Previous model was kept."));
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: interrupted"));
+        m_btnRetrain->setEnabled(true);
+        m_btnRecognize->setEnabled(!m_currentImagePath.isEmpty());
+        return;
+    }
+
+    bool ok = (exitStatus == QProcess::NormalExit && exitCode == 0);
+    if (ok) {
+        m_noticeLabel->setText(QStringLiteral("Retrain complete. Next recognition will use the updated model."));
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: complete"));
+    } else {
+        QString message = stderrText.isEmpty() ? stdoutText : stderrText;
+        m_noticeLabel->setText(QStringLiteral("Retrain failed: ") + message.left(180));
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: failed"));
+    }
+
+    m_btnRetrain->setEnabled(true);
+    m_btnRecognize->setEnabled(!m_currentImagePath.isEmpty());
+}
+
+void Sudoku_demo::closeEvent(QCloseEvent* event)
+{
+    if (m_trainingProcess && m_trainingProcess->state() != QProcess::NotRunning) {
+        m_trainingInterrupted = true;
+        m_trainingStatusLabel->setText(QStringLiteral("Retrain: stopping..."));
+        m_trainingProcess->terminate();
+        if (!m_trainingProcess->waitForFinished(3000)) {
+            m_trainingProcess->kill();
+            m_trainingProcess->waitForFinished(3000);
+        }
+    }
+
+    QWidget::closeEvent(event);
 }
