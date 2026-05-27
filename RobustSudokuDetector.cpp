@@ -39,8 +39,10 @@ cv::Mat RobustSudokuDetector::preprocess(const cv::Mat& src)
     cv::dilate(combined, dilV, kernelV);
     cv::bitwise_or(dilH, dilV, combined);
 
+#ifndef NDEBUG
     // [调试诊断] 将预处理后的二值图写入文件供排查（如果仍失败可以看这个图）
     cv::imwrite("debug_preprocess.png", combined);
+#endif
 
     return combined;
 }
@@ -226,7 +228,7 @@ cv::Mat RobustSudokuDetector::detect(const cv::Mat& src, std::string& diagMsg)
     }
     if (rawH.empty())
     {
-        diagMsg = "[Step 2 detectLines] 未检测到水平线，砪直线数量 = " + std::to_string(rawV.size());
+        diagMsg = "[Step 2 detectLines] 未检测到水平线，垂直线数量 = " + std::to_string(rawV.size());
         return cv::Mat();
     }
     if (rawV.empty())
@@ -261,7 +263,7 @@ cv::Mat RobustSudokuDetector::detect(const cv::Mat& src, std::string& diagMsg)
 
     if (!hOk && !vOk)
     {
-        diagMsg = "[Step 4 pickEvenlySpaced] 水平线和垂直线均无法拥合成等间距的 10 条\n"
+        diagMsg = "[Step 4 pickEvenlySpaced] 水平线和垂直线均无法拟合成等间距的 10 条\n"
                   "水平线聚类: " + std::to_string(hClusters.size()) + " 条  "
                   "垂直线聚类: " + std::to_string(vClusters.size()) + " 条\n"
                   "可能题目：检测线条断裂、线间距不均匀、或网格占图比例 < 20%";
@@ -269,14 +271,14 @@ cv::Mat RobustSudokuDetector::detect(const cv::Mat& src, std::string& diagMsg)
     }
     if (!hOk)
     {
-        diagMsg = "[Step 4 pickEvenlySpaced] 水平线拥合失败\n"
+        diagMsg = "[Step 4 pickEvenlySpaced] 水平线拟合失败\n"
                   "水平线聚类: " + std::to_string(hClusters.size()) + " 条\n"
                   "垂直线 OK（" + std::to_string(vClusters.size()) + " 条）";
         return cv::Mat();
     }
     if (!vOk)
     {
-        diagMsg = "[Step 4 pickEvenlySpaced] 垂直线拥合失败\n"
+        diagMsg = "[Step 4 pickEvenlySpaced] 垂直线拟合失败\n"
                   "垂直线聚类: " + std::to_string(vClusters.size()) + " 条\n"
                   "水平线 OK（" + std::to_string(hClusters.size()) + " 条）";
         return cv::Mat();

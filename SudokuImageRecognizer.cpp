@@ -3,7 +3,18 @@
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QStandardPaths>
-#include <opencv2/core/cuda.hpp>
+
+#if defined(__has_include)
+#  if __has_include(<opencv2/core/cuda.hpp>)
+#    include <opencv2/core/cuda.hpp>
+#    define SUDOKU_HAS_OPENCV_CUDA 1
+#  endif
+#endif
+
+#ifndef SUDOKU_HAS_OPENCV_CUDA
+#  define SUDOKU_HAS_OPENCV_CUDA 0
+#endif
+
 #include <utility>
 
 namespace {
@@ -53,11 +64,13 @@ SudokuImageRecognizer::SudokuImageRecognizer()
         }
 
         bool useCuda = false;
+#if SUDOKU_HAS_OPENCV_CUDA
         try {
             useCuda = cv::cuda::getCudaEnabledDeviceCount() > 0;
         } catch (const cv::Exception&) {
             useCuda = false;
         }
+#endif
 
         if (useCuda) {
             m_digitNet.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);

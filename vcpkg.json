@@ -1,5 +1,5 @@
 {
-  "name": "your-project-name",
+  "name": "sudoku-demo",
   "version": "1.0.0",
   "dependencies": [
     "opencv4"
