@@ -369,3 +369,25 @@ __pycache__/
 .DS_Store
 
 .zed/
+
+# Project-local dependency/install outputs
+vcpkg_installed/
+packages/
+
+# Qt/MSVC generated project output under the project name folder
+Sudoku_demo/x64/
+
+# Runtime diagnostics
+debug_preprocess.png
+
+# OCR retraining outputs and runtime model backups
+OCR_Model/retrain_data/
+OCR_Model/*.bak
+OCR_Model/*.tmp
+
+# Unused/reference OCR model experiments kept locally only
+OCR_Model/crnn.onnx
+OCR_Model/english_g2_jpqd.onnx
+OCR_Model/mnist-12.onnx
+OCR_Model/model-122000.pth
+OCR_Model/svhn_final_simple.onnx
