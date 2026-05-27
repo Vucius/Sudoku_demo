@@ -11,6 +11,7 @@ OutputDir=.
 OutputBaseFilename=Sudoku_demo_Setup
 Compression=lzma2
 SolidCompression=yes
+ArchitecturesInstallIn64BitMode=x64compatible arm64
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\Sudoku_demo.exe

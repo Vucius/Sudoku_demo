@@ -65,6 +65,12 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
+      - name: Cache vcpkg dependencies
+        uses: actions/cache@v4
+        with:
+          path: vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-b02e341c927f16d991edbd915d8ea43eac52096c-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', 'triplets/**') }}
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
@@ -78,7 +84,7 @@ jobs:
             -A ${{ matrix.cmake_arch }} `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET="${{ matrix.vcpkg_triplet }}" `
-            -DCMAKE_PREFIX_PATH="$env:Qt6_DIR"
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
 
       - name: Build
         shell: pwsh
@@ -167,6 +173,12 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
+      - name: Cache vcpkg dependencies
+        uses: actions/cache@v4
+        with:
+          path: vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-b02e341c927f16d991edbd915d8ea43eac52096c-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', 'triplets/**') }}
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
@@ -181,7 +193,7 @@ jobs:
             -DVCPKG_OVERLAY_TRIPLETS="$PWD/triplets" \
             -DVCPKG_TARGET_TRIPLET="${{ matrix.vcpkg_triplet }}" \
             -DCMAKE_OSX_ARCHITECTURES="${{ matrix.cmake_architectures }}" \
-            -DCMAKE_PREFIX_PATH="$Qt6_DIR"
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
 
       - name: Build
         shell: bash

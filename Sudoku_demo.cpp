@@ -25,6 +25,9 @@ QString resolveProjectDir()
     }
 
     QDir appDir(QCoreApplication::applicationDirPath());
+    if (QFileInfo::exists(appDir.filePath("OCR_Model/retrain_custom_model.py"))) {
+        return appDir.absolutePath();
+    }
     if (QFileInfo::exists(appDir.filePath("../../OCR_Model/retrain_custom_model.py"))) {
         appDir.cd("../..");
         return appDir.absolutePath();
@@ -557,6 +560,18 @@ void Sudoku_demo::startTrainingProcess(const QString& retrainDataDir)
             this, &Sudoku_demo::onTrainingError);
     connect(m_trainingProcess, &QProcess::finished,
             this, &Sudoku_demo::onTrainingFinished);
+    connect(m_trainingProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) {
+            m_noticeLabel->setText(QStringLiteral("Retrain failed to start: Python executable not found or failed to run."));
+            m_trainingStatusLabel->setText(QStringLiteral("Retrain: failed"));
+            m_btnRetrain->setEnabled(true);
+            m_btnRecognize->setEnabled(!m_currentImagePath.isEmpty());
+            if (m_trainingProcess) {
+                m_trainingProcess->deleteLater();
+                m_trainingProcess = nullptr;
+            }
+        }
+    });
 
     m_btnRetrain->setEnabled(false);
     m_btnRecognize->setEnabled(false);
