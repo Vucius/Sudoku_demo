@@ -61,7 +61,10 @@ void RobustSudokuDetector::detectLines(const cv::Mat& binary,
 
     for (auto& l : lines)
     {
-        float x1 = l[0], y1 = l[1], x2 = l[2], y2 = l[3];
+        float x1 = static_cast<float>(l[0]);
+        float y1 = static_cast<float>(l[1]);
+        float x2 = static_cast<float>(l[2]);
+        float y2 = static_cast<float>(l[3]);
         float dx = x2 - x1;
         float dy = y2 - y1;
         float angle = std::fabs(std::atan2(dy, dx));

@@ -90,6 +90,10 @@
     <ClCompile>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <WarningLevel>Level3</WarningLevel>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <TreatAngleIncludeAsExternal>true</TreatAngleIncludeAsExternal>
+      <ExternalIncludeDirectories>$(MSBuildProjectDirectory)\vcpkg_installed\x64-windows\include;$(MSBuildProjectDirectory)\vcpkg_installed\x64-windows\include\opencv4;$(QTDIR)\include;$(QtDir)\include;%(ExternalIncludeDirectories)</ExternalIncludeDirectories>
+      <AdditionalOptions>/external:W0 /external:I "$(MSBuildProjectDirectory)\vcpkg_installed\x64-windows\include" /external:I "$(MSBuildProjectDirectory)\vcpkg_installed\x64-windows\include\opencv4" /external:I "$(QTDIR)\include" /external:I "$(QtDir)\include" /analyze:external- %(AdditionalOptions)</AdditionalOptions>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
@@ -102,6 +106,10 @@
     <ClCompile>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <WarningLevel>Level3</WarningLevel>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <TreatAngleIncludeAsExternal>true</TreatAngleIncludeAsExternal>
+      <ExternalIncludeDirectories>$(MSBuildProjectDirectory)\vcpkg_installed\x64-windows\include;$(MSBuildProjectDirectory)\vcpkg_installed\x64-windows\include\opencv4;$(QTDIR)\include;$(QtDir)\include;%(ExternalIncludeDirectories)</ExternalIncludeDirectories>
+      <AdditionalOptions>/external:W0 /external:I "$(MSBuildProjectDirectory)\vcpkg_installed\x64-windows\include" /external:I "$(MSBuildProjectDirectory)\vcpkg_installed\x64-windows\include\opencv4" /external:I "$(QTDIR)\include" /external:I "$(QtDir)\include" /analyze:external- %(AdditionalOptions)</AdditionalOptions>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <FunctionLevelLinking>true</FunctionLevelLinking>

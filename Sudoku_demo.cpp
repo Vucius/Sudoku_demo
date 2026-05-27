@@ -161,7 +161,7 @@ Sudoku_demo::Sudoku_demo(QWidget* parent)
     setStyleSheet("QWidget { background-color: #F4F6FA; }");
 }
 
-Sudoku_demo::~Sudoku_demo() = default;
+Sudoku_demo::~Sudoku_demo() noexcept = default;
 
 QWidget* Sudoku_demo::createPanel(const QString& title, QWidget* content, const QColor& titleColor)
 {

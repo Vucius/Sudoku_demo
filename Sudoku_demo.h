@@ -24,7 +24,7 @@ class Sudoku_demo : public QWidget
 
 public:
     explicit Sudoku_demo(QWidget* parent = nullptr);
-    ~Sudoku_demo();
+    ~Sudoku_demo() noexcept override;
 
 private slots:
     void onLoadImage();
