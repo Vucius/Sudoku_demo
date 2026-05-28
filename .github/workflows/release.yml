@@ -59,6 +59,9 @@ jobs:
           if ($env:QT_ROOT_DIR -and (Test-Path "$env:QT_ROOT_DIR\bin")) {
             "$env:QT_ROOT_DIR\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
           }
+          if ($env:QT_HOST_PATH -and (Test-Path "$env:QT_HOST_PATH\bin")) {
+            "$env:QT_HOST_PATH\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          }
 
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
@@ -112,7 +115,13 @@ jobs:
           if (Test-Path "build\Release\*.dll") {
             Copy-Item build\Release\*.dll release_pkg\
           }
-          windeployqt --release --compiler-runtime --dir release_pkg release_pkg\Sudoku_demo.exe
+          $deployArgs = @("--release", "--compiler-runtime", "--dir", "release_pkg")
+          $targetQtPaths = Join-Path $env:QT_ROOT_DIR "bin\qtpaths.bat"
+          if (Test-Path $targetQtPaths) {
+            $deployArgs += @("--qtpaths", $targetQtPaths)
+          }
+          $deployArgs += "release_pkg\Sudoku_demo.exe"
+          windeployqt @deployArgs
 
       - name: Build installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
