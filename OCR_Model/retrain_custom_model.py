@@ -67,7 +67,7 @@ class DigitFolderDataset(Dataset):
 def export_onnx(model: nn.Module, output_path: Path):
     model.eval()
     model.cpu()
-    dummy_input = torch.randn(1, 3, 224, 224)
+    dummy_input = torch.randn(1, 3, 64, 64)
     torch.onnx.export(
         model,
         dummy_input,
@@ -89,12 +89,12 @@ def main():
     parser.add_argument("--output-pth", required=True)
     parser.add_argument("--output-onnx", required=True)
     parser.add_argument("--epochs", type=int, default=12)
-    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     args = parser.parse_args()
 
     transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.Resize((64, 64)),
         transforms.RandomRotation(5),
         transforms.RandomAffine(degrees=0, translate=(0.03, 0.03)),
         transforms.ToTensor(),
@@ -113,7 +113,7 @@ def main():
         raise RuntimeError("No training images found.")
 
     dataset = ConcatDataset(datasets)
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
+    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True)
 
     if hasattr(torch, "xpu") and torch.xpu.is_available():
         device = torch.device("xpu")

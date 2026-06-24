@@ -20,9 +20,9 @@ def get_font_paths():
 
 def generate_synthetic_data():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    OUTPUT_DIR = os.path.join(BASE_DIR, 'Character_Sample')
+    OUTPUT_DIR = BASE_DIR
     
-    canvas_size = (224, 224)
+    canvas_size = (64, 64)
     text_color = (0, 0, 0) # 纯黑字
     
     # 【升级点】融入网页数独最常见的几种背景色（白色、选中蓝、提示黄、阴影灰、通过绿）
@@ -35,11 +35,11 @@ def generate_synthetic_data():
     ]
     
     font_paths = get_font_paths()
-    font_sizes = [110, 125, 140]  # 优化字号跨度
-    pixel_offsets = [-4, 0, 4]    # 保持微调
+    font_sizes = [32, 38, 44]  # 优化字号跨度
+    pixel_offsets = [-2, 0, 2]    # 保持微调
 
     generated_count = 0
-    print("\n正在生成抗背景色干扰的高鲁棒性数字数据集...")
+    print("Generating dataset...")
     
     for digit in range(1, 10):
         digit_str = str(digit)
@@ -72,8 +72,7 @@ def generate_synthetic_data():
                             file_name = f"{font_name}_sz{size}_bg{bg[0]}_ox{ox}_oy{oy}.png"
                             img.save(os.path.join(digit_dir, file_name))
                             generated_count += 1
-
-    print(f"\n【合成完毕】🎉 数据集已更新！共生成 {generated_count} 张多色背景数字图片。")
+    print(f"Dataset generated: {generated_count} images.")
 
 if __name__ == "__main__":
     generate_synthetic_data()

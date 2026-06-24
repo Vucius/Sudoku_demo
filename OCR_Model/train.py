@@ -44,6 +44,9 @@ class SudokuDigitCNN(nn.Module):
         x = self.classifier(x)
         return x
 
+def shift_label(y):
+    return y + 1
+
 def main():
     # =====================================================================
     # 2. 环境与路径配置
@@ -57,7 +60,7 @@ def main():
         print("【设备提示】: 未检测到硬件加速，使用 CPU 运行。")
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATA_DIR = os.path.join(BASE_DIR, 'Character_Sample')
+    DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), 'Character_Sample')
     
     if not os.path.exists(DATA_DIR):
         print(f"【错误】找不到样本目录: {DATA_DIR}，请检查文件夹名称。")
@@ -67,15 +70,15 @@ def main():
     # 3. 数据读入与增强
     # =====================================================================
     train_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.Resize((64, 64)),
         transforms.RandomRotation(8),                 
         transforms.RandomAffine(degrees=0, translate=(0.05, 0.05)), 
         transforms.ToTensor(),
     ])
 
     try:
-        dataset = ImageFolder(root=DATA_DIR, transform=train_transform, target_transform=lambda y: y + 1)
-        train_loader = DataLoader(dataset, batch_size=8, shuffle=True)
+        dataset = ImageFolder(root=DATA_DIR, transform=train_transform, target_transform=shift_label)
+        train_loader = DataLoader(dataset, batch_size=64, shuffle=True, num_workers=2, pin_memory=True)
         print(f"【数据集】: 成功加载分类样本，共有 {len(dataset)} 张数字图片。")
     except Exception as e:
         print(f"【错误】数据集加载异常: {e}")
@@ -88,10 +91,10 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     
-    # 学习率每 15 轮减半，防止高轮次时在最优解附近来回震荡
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.5)
+    # 使用余弦退火学习率
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
 
-    epochs = 50  # 【已调整】从 15 轮提升至 50 轮以最大化准确率
+    epochs = 20  # 优化为20轮，配合余弦退火快速收敛
     print(f"\n开始训练（共计 {epochs} 轮）...")
     model.train()
     
@@ -137,7 +140,7 @@ def main():
     
     # 将模型与导出的 dummy_input 临时转到 CPU 进行稳定导出
     model.to('cpu')
-    dummy_input = torch.randn(1, 3, 224, 224, device='cpu')
+    dummy_input = torch.randn(1, 3, 64, 64, device='cpu')
     
     torch.onnx.export(
         model, 
@@ -148,7 +151,7 @@ def main():
         do_constant_folding=True,
         input_names=['input'], 
         output_names=['output'],
-    	dynamo=False,
+        dynamo=False,
     )
     print(f"【导出成功】ONNX 静态模型已存至: {onnx_save_path}")
     print("="*30)

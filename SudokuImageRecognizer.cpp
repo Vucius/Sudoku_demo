@@ -98,7 +98,7 @@ cv::Mat SudokuImageRecognizer::preprocessDigitForCustomModel(const cv::Mat& cell
     }
 
     cv::Mat resized;
-    cv::resize(bgr, resized, cv::Size(224, 224), 0, 0, cv::INTER_AREA);
+    cv::resize(bgr, resized, cv::Size(64, 64), 0, 0, cv::INTER_AREA);
     return resized;
 }
 
@@ -148,7 +148,7 @@ int SudokuImageRecognizer::recognizeDigit(const cv::Mat& cell)
     if (bbox.width < 3 || bbox.height < 6) return 0;
 
     cv::Mat digit = preprocessDigitForCustomModel(cell);
-    cv::Mat blob = cv::dnn::blobFromImage(digit, 1.0 / 255.0, cv::Size(224, 224),
+    cv::Mat blob = cv::dnn::blobFromImage(digit, 1.0 / 255.0, cv::Size(64, 64),
                                           cv::Scalar(),
                                           true, false, CV_32F);
 

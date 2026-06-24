@@ -123,10 +123,13 @@ jobs:
           $deployArgs += "release_pkg\Sudoku_demo.exe"
           windeployqt @deployArgs
 
+      - name: Install NSIS
+        run: choco install nsis --no-progress -y
+        shell: pwsh
+
       - name: Build installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-        with:
-          path: installer.iss
+        shell: pwsh
+        run: makensis installer.nsi
 
       - name: Rename installer
         shell: pwsh
